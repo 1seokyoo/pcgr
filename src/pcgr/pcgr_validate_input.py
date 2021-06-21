@@ -68,9 +68,9 @@ def is_valid_cna(cna_segment_file, logger):
       err_msg = '\'End\' column of copy number segment file contains non-integer values'
       return pcgr_error_message(err_msg, logger)
 
-   if not cna_dataframe['Segment_Mean'].dtype.kind in 'if': ## check that 'Segment_Mean' is of type integer/float
-      err_msg = '\'Segment_Mean\' column of copy number segment file contains non-numerical values'
-      return pcgr_error_message(err_msg, logger)
+   # if not cna_dataframe['Segment_Mean'].dtype.kind in 'if': ## check that 'Segment_Mean' is of type integer/float
+   #    err_msg = '\'Segment_Mean\' column of copy number segment file contains non-numerical values'
+   #    return pcgr_error_message(err_msg, logger)
 
    for rec in cna_reader:
       if int(rec['End']) < int(rec['Start']): ## check that 'End' is always greather than 'Start'

@@ -99,7 +99,6 @@ generate_pcgr_report <- function(project_directory,
         pcg_report[["metadata"]][["phenotype_ontology"]][["oncotree_query"]],
       maf_filenames = fnames)
 
-
   if (nrow(sample_calls) > 0) {
 
     assay_props <-
@@ -712,9 +711,9 @@ generate_report_data_cna <-
                          stringsAsFactors = F, sep = "\t",
                          comment.char = "", quote = "") %>%
       dplyr::rename(chromosome = Chromosome, LogR = Segment_Mean,
-                    segment_start = Start, segment_end = End) %>%
+                    segment_start = Start, segment_end = End, symbol = Gene) %>%
       dplyr::distinct() %>%
-      dplyr::select(chromosome, LogR, segment_start, segment_end) %>%
+      dplyr::select(chromosome, LogR, segment_start, segment_end, symbol) %>%
       dplyr::mutate(
         chromosome = stringr::str_replace(chromosome, "^chr", "")) %>%
       pcgrr::get_valid_chromosomes(
@@ -724,7 +723,9 @@ generate_report_data_cna <-
         genome_assembly = pcgr_data[["assembly"]][["grch_name"]],
         bsg = pcgr_data[["assembly"]][["bsg"]]) %>%
       dplyr::filter(!is.na(LogR)) %>%
-      dplyr::mutate(LogR = round(as.numeric(LogR), digits = 3)) %>%
+      # dplyr::mutate(LogR = round(as.numeric(LogR), digits = 3)) %>%
+      # In NGeneBio, the code was modified to convert data because NGAS's LogR form is string, not int/float
+      dplyr::mutate(LogR = LogR) %>%
       dplyr::mutate(SEGMENT_ID = paste0(chromosome, ":",
                                         segment_start, "-",
                                         segment_end)) %>%
@@ -749,7 +750,8 @@ generate_report_data_cna <-
 
     #### FIND AND APPEND GENCODE TRANSCRIPTS THAT OVERLAP
     cna_transcript_df <-
-      pcgrr::get_cna_overlapping_transcripts(cna_df, pcgr_data = pcgr_data)
+      pcgrr::get_cna_overlapping_transcripts(cna_df, pcgr_data = pcgr_data) %>%
+      dplyr::filter(symbol %in% cna_df$symbol)
 
     #### GENERATE DATAFRAME OF UNIQUE TRANSCRIPT-CNA SEGMENTS FOR OUTPUT TSV
     cna_transcript_df_print <- cna_transcript_df %>%
@@ -806,6 +808,7 @@ generate_report_data_cna <-
         link_display_var = "GENENAME",
         url_prefix = "http://www.ncbi.nlm.nih.gov/gene/")
 
+    rlogging::message("In NGeneBio, the code was modified to add source db")
     cna_transcript_df <- cna_transcript_df %>%
       dplyr::left_join(dplyr::rename(entrezgene_annotation_links,
                                      GENE_NAME = link),
@@ -817,13 +820,16 @@ generate_report_data_cna <-
       dplyr::distinct() %>%
       dplyr::left_join(avg_transcript_overlap, by = c("SEGMENT_ID", "SYMBOL"))
 
-
-    n_cna_loss <- dplyr::filter(cna_segments, LOG_R <= log_r_homdel) %>%
+    rlogging::message("In NGeneBio, the code was modified to apply NGeneBio's standard of CNV detection.")
+    # n_cna_loss <- dplyr::filter(cna_segments, LOG_R <= log_r_homdel) %>%
+    n_cna_loss <- dplyr::filter(cna_segments, stringr::str_detect(LOG_R, "copy_loss")) %>%
       nrow()
-    n_cna_gain <- dplyr::filter(cna_segments, LOG_R >= log_r_gain) %>%
+    # n_cna_gain <- dplyr::filter(cna_segments, LOG_R >= log_r_gain) %>%
+    n_cna_gain <- dplyr::filter(cna_segments, stringr::str_detect(LOG_R, "copy_gain")) %>%
       nrow()
     cna_segments_filtered <- cna_segments %>%
-      dplyr::filter(LOG_R >= log_r_gain | LOG_R <= log_r_homdel) %>%
+      # dplyr::filter(LOG_R >= log_r_gain | LOG_R <= log_r_homdel) %>%
+      dplyr::filter(LOG_R == 'copy_loss' | LOG_R == 'copy_gain') %>%
       dplyr::arrange(desc(LOG_R))
     rlogging::message(
       paste0("Detected ", nrow(cna_segments_filtered),
@@ -835,9 +841,14 @@ generate_report_data_cna <-
     ## Get aberration sets related to tumor suppressor genes
     ## /oncogenes/drug targets
     onco_ts_sets <-
+      # pcgrr::get_oncogene_tsgene_target_sets(cna_transcript_df,
+      #                                        log_r_homdel = log_r_homdel,
+      #                                        log_r_gain = log_r_gain,
+      #                                        tumor_type = tumor_type,
+      #                                        pcgr_data = pcgr_data)
       pcgrr::get_oncogene_tsgene_target_sets(cna_transcript_df,
-                                             log_r_homdel = log_r_homdel,
-                                             log_r_gain = log_r_gain,
+                                             log_r_homdel = 'copy_loss',
+                                             log_r_gain = 'copy_gain',
                                              tumor_type = tumor_type,
                                              pcgr_data = pcgr_data)
 
@@ -851,7 +862,6 @@ generate_report_data_cna <-
       tumor_type_specificity = "any")
 
 
-
     ## Get all clinical evidence items that are related to
     ## tumor suppressor genes/oncogenes/drug targets (NOT tumor-type specific)
     biomarker_hits_cna_any <-
@@ -863,6 +873,7 @@ generate_report_data_cna <-
       biomarker_hits_cna_any[["clin_eitem"]]
     pcg_report_cna[["variant_set"]][["tier2"]] <-
       biomarker_hits_cna_any$variant_set
+
 
     ## Get all clinical evidence items that
     ## overlap query set (if tumor type is specified)
@@ -890,6 +901,8 @@ generate_report_data_cna <-
         biomarker_hits_cna_specific$variant_set
     }
 
+
+
     pcg_report_cna[["eval"]] <- T
     pcg_report_cna[["variant_set"]][["tsv"]] <-
       cna_transcript_df_print
@@ -909,6 +922,7 @@ generate_report_data_cna <-
 
     pcg_report_cna <-
       pcgrr::assign_tier1_tier2_acmg_cna(pcg_report_cna)
+
 
     return(pcg_report_cna)
   }
@@ -1145,19 +1159,35 @@ write_report_output <- function(project_directory,
     }
   }
   if (output_format == "json") {
-    if (!is.null(report[["cna_plot"]][["png"]])) {
-      report[["cna_plot"]][["png"]] <- NULL
-    }
-    if (!is.null(report[["tmb"]][["tcga_tmb"]])) {
-      report[["tmb"]][["tcga_tmb"]] <- NULL
-    }
+
+    # In NGeneBio, the code was modified to remove data because NGAS doesn't use that
+    # if (!is.null(report[["cna_plot"]][["png"]])) {
+    #   report[["cna_plot"]][["png"]] <- NULL
+    # }
+    # if (!is.null(report[["tmb"]][["tcga_tmb"]])) {
+    #   report[["tmb"]][["tcga_tmb"]] <- NULL
+    # }
+    report[["content"]][["tmb"]] <- NULL
+    report[["content"]][["msi"]] <- NULL
+    report[["content"]][["cna_plot"]] <- NULL
+    report[["content"]][["m_signature_mp"]] <- NULL
+    report[["content"]][["sequencing_mode"]] <- NULL
+    report[["content"]][["tumor_only"]] <- NULL
+    report[["content"]][["value_box"]] <- NULL
+    report[["content"]][["rainfall"]] <- NULL
+    report[["content"]][["kataegis"]] <- NULL
+    report[["content"]][["tumor_purity"]] <- NULL
+    report[["content"]][["tumor_ploidy"]] <- NULL
+    report[["content"]][["report_display_config"]] <- NULL
+    
     rlogging::message("------")
     rlogging::message("Writing JSON file (.json) with report contents")
     pcgr_json <- jsonlite::toJSON(report, pretty = T, na = "string",
                                   null = "null", force = T)
     write(pcgr_json, fnames[["json"]])
-    gzip_command <- paste0("gzip -f ", fnames[["json"]])
-    system(gzip_command, intern = F)
+    # In NGeneBio, the code was modified to do not gzip json file
+    # gzip_command <- paste0("gzip -f ", fnames[["json"]])
+    # system(gzip_command, intern = F)
   }
 
   if (output_format == "snv_tsv" | output_format == "snv_tsv_unfiltered") {

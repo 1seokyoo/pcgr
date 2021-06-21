@@ -134,8 +134,8 @@ get_cna_cytoband <- function(cna_df, pcgr_data = NULL) {
 get_oncogene_tsgene_target_sets <- function(
   cna_df,
   transcript_overlap_pct = 100,
-  log_r_gain = 0.8,
-  log_r_homdel = -0.8,
+  log_r_gain = 'copy_gain',
+  log_r_homdel = 'copy_loss',
   tumor_type = "Any",
   pcgr_data = NULL) {
 
@@ -154,20 +154,12 @@ get_oncogene_tsgene_target_sets <- function(
   onco_ts_sets <- list()
   onco_ts_sets[["oncogene_gain"]] <- data.frame()
   onco_ts_sets[["oncogene_gain"]] <-
-    dplyr::filter(cna_df, ONCOGENE == T & TUMOR_SUPPRESSOR == F &
-                    MEAN_TRANSCRIPT_CNA_OVERLAP >= transcript_overlap_pct &
-                    LOG_R >= log_r_gain)
+    dplyr::filter(cna_df, LOG_R == log_r_gain)
   onco_ts_sets[["tsgene_loss"]] <- data.frame()
   onco_ts_sets[["tsgene_loss"]] <-
-    dplyr::filter(cna_df, TUMOR_SUPPRESSOR == T &
-                    MEAN_TRANSCRIPT_CNA_OVERLAP >= transcript_overlap_pct  &
-                    LOG_R <= log_r_homdel)
+    dplyr::filter(cna_df, LOG_R == log_r_homdel)
 
   onco_ts_sets[["other_target"]] <- data.frame()
-  onco_ts_sets[["other_target"]] <-
-    dplyr::filter(cna_df, TUMOR_SUPPRESSOR == F & ONCOGENE == F &
-                    MEAN_TRANSCRIPT_CNA_OVERLAP >= transcript_overlap_pct  &
-                    LOG_R >= log_r_gain)
 
   drug_target_site <-
     pcgrr::targeted_drugs_pr_ttype(
@@ -194,7 +186,7 @@ get_oncogene_tsgene_target_sets <- function(
 
     rlogging::message(
       paste0("Detected ", nrow(onco_ts_sets[["other_target"]]),
-             " drug targets to amplification (log(2) ratio >= ",
+             " drug targets to amplification (",
              log_r_gain, "): ",
              paste0(unique(onco_ts_sets[["other_target"]]$SYMBOL),
                     collapse = ", ")))
@@ -222,7 +214,7 @@ get_oncogene_tsgene_target_sets <- function(
       if (t == "oncogene_gain") {
         rlogging::message(
           paste0("Detected ", nrow(onco_ts_sets[[t]]),
-                 " proto-oncogene(s) subject to amplification (log(2) ratio >= ",
+                 " proto-oncogene(s) subject to amplification (",
                  log_r_gain, "): ",
                  paste0(unique(onco_ts_sets[[t]]$SYMBOL), collapse = ", ")))
         onco_ts_sets[[t]] <- onco_ts_sets[[t]] %>%
@@ -237,22 +229,22 @@ get_oncogene_tsgene_target_sets <- function(
           rlogging::message(
             paste0("Detected ", nrow(onco_ts_sets[[t]]),
                    " tumor suppressor gene(s) subject to ",
-                   "homozygous deletions (log(2) ratio <= ",
+                   "homozygous deletions (",
                    log_r_homdel, "): ",
                    paste0(unique(onco_ts_sets[[t]]$SYMBOL), collapse = ", ")))
       }
     }else{
       if (t == "tsgene_loss") {
         rlogging::message("Detected 0 tumor suppressor genes subject to",
-                          " homozygous deletion (log(2) ratio <= ",
+                          " homozygous deletion (",
                           log_r_homdel)
       }else{
         if (t == "other_target") {
           rlogging::message("Detected 0 other drug targets subject to ",
-                            "amplification (log(2) ratio >= ", log_r_gain)
+                            "amplification (", log_r_gain)
         }else{
           rlogging::message("Detected 0 proto-oncogenes subject to ",
-                            "amplification (log(2) ratio >= ", log_r_gain)
+                            "amplification (", log_r_gain)
         }
       }
     }

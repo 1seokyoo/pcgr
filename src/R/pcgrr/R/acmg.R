@@ -77,22 +77,45 @@ assign_tier1_tier2_acmg <- function(pcg_report_snv_indel) {
         }
       }
     }
-    if (nrow(eitems_specific_ttype[[etype]][["C_D_E"]]) > 0) {
+    # if (nrow(eitems_specific_ttype[[etype]][["C_D_E"]]) > 0) {
+    #   if (nrow(unique_variants_tier1) > 0) {
+    #     if (pcgrr::check_common_colnames(
+    #       df1 = unique_variants_tier1,
+    #       df2 = eitems_specific_ttype[[etype]][["C_D_E"]],
+    #       cnames = c("GENOMIC_CHANGE"))) {
+    #       eitems_specific_ttype[[etype]][["C_D_E"]] <-
+    #         dplyr::anti_join(
+    #           eitems_specific_ttype[[etype]][["C_D_E"]],
+    #           unique_variants_tier1, by = c("GENOMIC_CHANGE"))
+    #     }
+    #   }
+    #   if (nrow(eitems_specific_ttype[[etype]][["C_D_E"]]) > 0) {
+    #     unique_variants_tier2 <- unique_variants_tier2 %>%
+    #       dplyr::bind_rows(
+    #         dplyr::select(eitems_specific_ttype[[etype]][["C_D_E"]],
+    #                       GENOMIC_CHANGE)) %>%
+    #       dplyr::distinct()
+    #   }
+    # }
+    rlogging::message("In NGeneBio, the code was modified to apply NGeneBio's standard of SNV/INDEL evidence.")
+    rlogging::message("The code was modified to check evidence C/D/E as any tumor type instead of specific tumor type")
+    
+    if (nrow(eitems_any_ttype[[etype]][["C_D_E"]]) > 0) {
       if (nrow(unique_variants_tier1) > 0) {
         if (pcgrr::check_common_colnames(
           df1 = unique_variants_tier1,
-          df2 = eitems_specific_ttype[[etype]][["C_D_E"]],
+          df2 = eitems_any_ttype[[etype]][["C_D_E"]],
           cnames = c("GENOMIC_CHANGE"))) {
-          eitems_specific_ttype[[etype]][["C_D_E"]] <-
+          eitems_any_ttype[[etype]][["C_D_E"]] <-
             dplyr::anti_join(
-              eitems_specific_ttype[[etype]][["C_D_E"]],
+              eitems_any_ttype[[etype]][["C_D_E"]],
               unique_variants_tier1, by = c("GENOMIC_CHANGE"))
         }
       }
-      if (nrow(eitems_specific_ttype[[etype]][["C_D_E"]]) > 0) {
+      if (nrow(eitems_any_ttype[[etype]][["C_D_E"]]) > 0) {
         unique_variants_tier2 <- unique_variants_tier2 %>%
           dplyr::bind_rows(
-            dplyr::select(eitems_specific_ttype[[etype]][["C_D_E"]],
+            dplyr::select(eitems_any_ttype[[etype]][["C_D_E"]],
                           GENOMIC_CHANGE)) %>%
           dplyr::distinct()
       }
@@ -243,15 +266,29 @@ assign_tier1_tier2_acmg_cna <- function(pcg_report_cna) {
               by = c("SYMBOL", "SEGMENT", "CNA_TYPE"))
         }
       }
-      if (nrow(eitems_specific_ttype[[etype]][["C_D_E"]]) > 0) {
+      # if (nrow(eitems_specific_ttype[[etype]][["C_D_E"]]) > 0) {
 
-        assertable::assert_colnames(eitems_specific_ttype[[etype]][["C_D_E"]],
+      #   assertable::assert_colnames(eitems_specific_ttype[[etype]][["C_D_E"]],
+      #                               c("SYMBOL", "SEGMENT", "CNA_TYPE"),
+      #                               only_colnames = F, quiet = T)
+
+      #   unique_variants_tier2 <- unique_variants_tier2 %>%
+      #     dplyr::bind_rows(
+      #       dplyr::select(eitems_specific_ttype[[etype]][["C_D_E"]],
+      #                     SYMBOL, SEGMENT, CNA_TYPE)) %>%
+      #     dplyr::distinct()
+      # }
+    rlogging::message("In NGeneBio, the code was modified to apply NGeneBio's standard of SNV/INDEL evidence.")
+    rlogging::message("The code was modified to check evidence C/D/E as any tumor type instead of specific tumor type")
+      if (nrow(eitems_any_ttype[[etype]][["C_D_E"]]) > 0) {
+
+        assertable::assert_colnames(eitems_any_ttype[[etype]][["C_D_E"]],
                                     c("SYMBOL", "SEGMENT", "CNA_TYPE"),
                                     only_colnames = F, quiet = T)
 
         unique_variants_tier2 <- unique_variants_tier2 %>%
           dplyr::bind_rows(
-            dplyr::select(eitems_specific_ttype[[etype]][["C_D_E"]],
+            dplyr::select(eitems_any_ttype[[etype]][["C_D_E"]],
                           SYMBOL, SEGMENT, CNA_TYPE)) %>%
           dplyr::distinct()
       }

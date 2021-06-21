@@ -56,6 +56,7 @@ rlogging::SetLogFile(NULL)
 rlogging::message(paste0("Tumor primary site: ",tumor_site))
 
 pcgr_data <- readRDS(paste0(data_dir,'/data/',genome_assembly,'/rds/pcgr_data.rds'))
+pcgr_data[["biomarkers"]][["civic"]] <- readRDS(paste0(data_dir,'/data/',genome_assembly,'/rds/pcgr_civic.ngb.rds'))
 
 pcgr_data[['assembly']][['seqinfo']] <- 
    GenomeInfoDb::Seqinfo(seqnames = GenomeInfoDb::seqlevels(GenomeInfoDb::seqinfo(BSgenome.Hsapiens.UCSC.hg38)), 
@@ -160,14 +161,14 @@ pcg_report <- pcgrr::generate_pcgr_report(dir, query_vcf2tsv,pcgr_data,
 ## Write report and result files
 if(!is.null(pcg_report)){
   pcgrr::write_report_output(dir, pcg_report, sample_name, genome_assembly, output_format = 'json')
-  pcgrr::write_report_output(dir, pcg_report, sample_name, genome_assembly, output_format = 'snv_tsv')
-  pcgrr::write_report_output(dir, pcg_report, sample_name, genome_assembly, output_format = 'msigs_tsv')
-  if(pcgr_config[['assay_props']][['vcf_tumor_only']] == T){
-    pcgrr::write_report_output(dir, pcg_report, sample_name, genome_assembly, output_format = 'snv_tsv_unfiltered')
-  }
-  pcgrr::write_report_output(dir, pcg_report, sample_name, genome_assembly, output_format = 'cna_tsv')
-  pcgrr::write_report_output(dir, pcg_report, sample_name, genome_assembly, output_format = 'html')
-  pcgrr::write_report_output(dir, pcg_report, sample_name, genome_assembly, output_format = 'html', flexdb = T)
+  # pcgrr::write_report_output(dir, pcg_report, sample_name, genome_assembly, output_format = 'snv_tsv')
+  # pcgrr::write_report_output(dir, pcg_report, sample_name, genome_assembly, output_format = 'msigs_tsv')
+  # if(pcgr_config[['assay_props']][['vcf_tumor_only']] == T){
+  #   pcgrr::write_report_output(dir, pcg_report, sample_name, genome_assembly, output_format = 'snv_tsv_unfiltered')
+  # }
+  # pcgrr::write_report_output(dir, pcg_report, sample_name, genome_assembly, output_format = 'cna_tsv')
+  # pcgrr::write_report_output(dir, pcg_report, sample_name, genome_assembly, output_format = 'html')
+  # pcgrr::write_report_output(dir, pcg_report, sample_name, genome_assembly, output_format = 'html', flexdb = T)
 
 }
 

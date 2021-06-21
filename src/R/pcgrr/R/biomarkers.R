@@ -42,21 +42,18 @@ get_clin_assocs_snv_indel <- function(sample_calls,
 
   ## get clinical evidence items that associated with
   ## query variants (non-regional - exact), civic + cgi
+  colset <- append(annotation_tags$all, 'HGVSp_short')
   for (db in c("civic", "cgi")) {
     var_eitems_exact <-
       pcgrr::match_eitems_to_var(
         sample_calls,
         db = db,
-        colset = annotation_tags$all,
+        colset = colset,
         eitems = eitems,
         region_marker = F)
 
     var_eitems[["exact"]] <- var_eitems[["exact"]] %>%
-      dplyr::bind_rows(var_eitems_exact) %>%
-      pcgrr::remove_cols_from_df(
-        cnames = c("EITEM_CONSEQUENCE", "EITEM_CODON",
-                   "EITEM_EXON"))
-
+      dplyr::bind_rows(var_eitems_exact) 
   }
 
   ## get clinical evidence items that associated with
@@ -65,23 +62,35 @@ get_clin_assocs_snv_indel <- function(sample_calls,
     pcgrr::match_eitems_to_var(
       sample_calls,
       db = "civic",
-      colset = annotation_tags$all,
+      colset = colset,
       eitems = eitems,
       region_marker = T)
 
   ## for regional biomarkers - perform additional quality checks
   ## (making sure variants are of correct consequence,
   ## at the correct amino acid position etc)
-  for (m in c("codon", "exon", "gene")) {
+  for (m in c("exact", "codon", "exon", "gene")) {
+  # for (m in c("codon", "exon", "gene")) {
     if (nrow(var_eitems_regional) > 0) {
-      var_eitems[[m]] <-
-        pcgrr::qc_var_eitems(var_eitems = var_eitems_regional,
-                             marker_type = m)
+      if (m == "exact"){
+        var_eitems_exact <-
+          pcgrr::qc_var_eitems(var_eitems = var_eitems_regional,
+                               marker_type = m)
+
+        var_eitems[["exact"]] <- var_eitems[["exact"]] %>%
+          dplyr::bind_rows(var_eitems_exact) %>%
+          unique()
+
+      }else{
+        var_eitems[[m]] <-
+          pcgrr::qc_var_eitems(var_eitems = var_eitems_regional,
+                               marker_type = m)
+      }
     }
   }
 
 
-  var_eitems <- pcgrr::deduplicate_eitems(var_eitems = var_eitems,
+    var_eitems <- pcgrr::deduplicate_eitems(var_eitems = var_eitems,
                                           target_type = "exact",
                                           target_other =
                                             c("codon", "exon", "gene"))
@@ -93,16 +102,19 @@ get_clin_assocs_snv_indel <- function(sample_calls,
 
   ## limit evidence items to exact/codon and exon
   ## (ignore biomarkers reported with a gene-level resolution)
+  # In NGeneBio, "gene" match evidnece is add all variant evidence.
   all_var_evidence_items <- all_var_evidence_items %>%
     dplyr::bind_rows(var_eitems[["exact"]]) %>%
     dplyr::bind_rows(var_eitems[["codon"]]) %>%
-    dplyr::bind_rows(var_eitems[["exon"]])
+    dplyr::bind_rows(var_eitems[["exon"]]) 
+    # dplyr::bind_rows(var_eitems[["gene"]])
 
   ## log the types and number of clinical
   ## evidence items found (exact / codon / exon)
   pcgrr::log_var_eitem_stats(var_eitems = var_eitems, target_type = "exact")
   pcgrr::log_var_eitem_stats(var_eitems = var_eitems, target_type = "codon")
   pcgrr::log_var_eitem_stats(var_eitems = var_eitems, target_type = "exon")
+  # pcgrr::log_var_eitem_stats(var_eitems = var_eitems, target_type = "gene")
 
   ## Organize all variants in a list object 'clin_items', organized through
   ## 1) tumor type (specific_ttype|any_ttype|other_ttype)
@@ -146,6 +158,8 @@ get_clin_assocs_snv_indel <- function(sample_calls,
 get_clin_assocs_cna <- function(onco_ts_sets,
                                 annotation_tags = NULL,
                                 eitems = NULL){
+
+  annotation_tags$cna_display <- append(annotation_tags$cna_display, 'SOURCE_DB')
 
   assertthat::assert_that(
     "oncogene_gain" %in% names(onco_ts_sets) &
@@ -357,7 +371,7 @@ load_all_eitems <- function(eitems_raw = NULL,
       selected_eitems[[db]] <-
         eitems_raw[[db]] %>%
           dplyr::filter(ALTERATION_TYPE == alteration_type &
-                          !is.na(EITEM_CONSEQUENCE) &
+                         !is.na(EITEM_CONSEQUENCE) &
                           stringr::str_detect(VARIANT_ORIGIN, origin)) %>%
           dplyr::rename(CNA_TYPE = EITEM_CONSEQUENCE) %>%
           pcgrr::remove_cols_from_df(
@@ -378,8 +392,7 @@ load_all_eitems <- function(eitems_raw = NULL,
                         stringr::str_detect(VARIANT_ORIGIN, origin)) %>%
         pcgrr::remove_cols_from_df(
           cnames =
-            c("VARIANT_NAME",
-              "STATUS",
+            c("STATUS",
               "DRUG_INTERACTION_TYPE",
               "MOLECULE_CHEMBL_ID",
               "MAPPING_RANK",
@@ -470,6 +483,15 @@ match_eitems_to_var <- function(sample_calls,
     )
   }
 
+  if (region_marker == F) {
+    var_eitems <- var_eitems %>%
+      pcgrr::remove_cols_from_df(cnames = evidence_identifiers) %>%
+      pcgrr::remove_cols_from_df(cnames = c("EITEM_CONSEQUENCE", 
+                                            "EITEM_CODON",
+                                            "EITEM_EXON",
+                                            "HGVSp_short",
+                                            "VARIANT_NAME"))
+  }
 
   return(var_eitems)
 
@@ -483,10 +505,11 @@ qc_var_eitems <- function(var_eitems = NULL,
   invisible(assertthat::assert_that(!is.null(var_eitems)))
   invisible(
     assertthat::assert_that(
-      marker_type == "codon" |
+      marker_type == "exact" |
+        marker_type == "codon" |
         marker_type == "exon" |
         marker_type == "gene",
-      msg = "Argument marker_type can only be any of 'exon','codon' or 'gene'"))
+      msg = "Argument marker_type can only be any of 'exact', 'exon','codon' or 'gene'"))
   invisible(
     assertthat::assert_that(
       is.data.frame(var_eitems),
@@ -499,63 +522,80 @@ qc_var_eitems <- function(var_eitems = NULL,
     quiet = T)
 
   filtered_var_eitems <- data.frame()
-  if (marker_type == "codon") {
-    if (nrow(var_eitems[!is.na(var_eitems$EITEM_CODON) &
-                    var_eitems$BIOMARKER_MAPPING == "codon", ]) > 0) {
+  # In NGeneBio, the code is added (Exactly AA change match evidence)
+  if (marker_type == "exact") {
+    if (nrow(var_eitems[var_eitems$BIOMARKER_MAPPING == "exact", ]) > 0) {
       filtered_var_eitems <- var_eitems %>%
-        dplyr::filter(!is.na(EITEM_CODON) & BIOMARKER_MAPPING == "codon") %>%
-        dplyr::filter(EITEM_CODON <= AMINO_ACID_END &
-                        EITEM_CODON >= AMINO_ACID_START &
-                        (!is.na(EITEM_CONSEQUENCE) &
-                           startsWith(CONSEQUENCE, EITEM_CONSEQUENCE) |
-                           is.na(EITEM_CONSEQUENCE)) &
-                        CODING_STATUS == "coding")
-
+        dplyr::mutate(
+          HGVSp_short = as.character(
+            stringr::str_replace(HGVSp_short, "p\\.", ""))) %>%
+        dplyr::mutate(
+          HGVSp_short = toupper(HGVSp_short)) %>%
+        dplyr::mutate(
+          VARIANT_NAME = toupper(VARIANT_NAME)) %>%
+        dplyr::filter(BIOMARKER_MAPPING == "exact" &
+                      VARIANT_NAME == HGVSp_short)
     }
-  }
+  }else{
+    if (marker_type == "codon") {
+      if (nrow(var_eitems[!is.na(var_eitems$EITEM_CODON) &
+                      var_eitems$BIOMARKER_MAPPING == "codon", ]) > 0) {
+        filtered_var_eitems <- var_eitems %>%
+          dplyr::filter(!is.na(EITEM_CODON) & BIOMARKER_MAPPING == "codon") %>%
+          dplyr::filter(EITEM_CODON <= AMINO_ACID_END &
+                          EITEM_CODON >= AMINO_ACID_START &
+                          (!is.na(EITEM_CONSEQUENCE) &
+                            startsWith(CONSEQUENCE, EITEM_CONSEQUENCE) |
+                            is.na(EITEM_CONSEQUENCE)) &
+                          CODING_STATUS == "coding")
 
-  if (marker_type == "exon") {
-    if (nrow(var_eitems[!is.na(var_eitems$EITEM_EXON) &
-                    var_eitems$BIOMARKER_MAPPING == "exon", ]) > 0) {
-      filtered_var_eitems <- var_eitems %>%
-        dplyr::filter(!is.na(EITEM_EXON) & BIOMARKER_MAPPING == "exon") %>%
-        dplyr::filter(EXON == EITEM_EXON &
-                        (!is.na(EITEM_CONSEQUENCE) &
+      }
+    }
+
+    if (marker_type == "exon") {
+      if (nrow(var_eitems[!is.na(var_eitems$EITEM_EXON) &
+                      var_eitems$BIOMARKER_MAPPING == "exon", ]) > 0) {
+        filtered_var_eitems <- var_eitems %>%
+          dplyr::filter(!is.na(EITEM_EXON) & BIOMARKER_MAPPING == "exon") %>%
+          dplyr::filter(EXON == EITEM_EXON &
+                          (!is.na(EITEM_CONSEQUENCE) &
+                            startsWith(CONSEQUENCE, EITEM_CONSEQUENCE) |
+                          is.na(EITEM_CONSEQUENCE)) & CODING_STATUS == "coding")
+      }
+    }
+
+    if (marker_type == "gene") {
+      if (nrow(var_eitems[var_eitems$BIOMARKER_MAPPING == "gene", ]) > 0) {
+        filtered_var_eitems <- var_eitems %>%
+          dplyr::filter(BIOMARKER_MAPPING == "gene" &
+                          CODING_STATUS == "coding") %>%
+          dplyr::filter((!is.na(EITEM_CONSEQUENCE) &
                           startsWith(CONSEQUENCE, EITEM_CONSEQUENCE) |
-                         is.na(EITEM_CONSEQUENCE)) & CODING_STATUS == "coding")
+                          is.na(EITEM_CONSEQUENCE)) & CODING_STATUS == "coding")
+
+      }
+    }
+
+    if (nrow(filtered_var_eitems) > 0) {
+
+      if("LOSS_OF_FUNCTION" %in% colnames(filtered_var_eitems) &
+        "ALTERATION_TYPE" %in% colnames(filtered_var_eitems)){
+
+        filtered_var_eitems <- filtered_var_eitems %>%
+          dplyr::filter((LOSS_OF_FUNCTION == T &
+                          ALTERATION_TYPE == "MUT_LOF") |
+                          is.na(LOSS_OF_FUNCTION) |
+                          (LOSS_OF_FUNCTION == F &
+                            ALTERATION_TYPE != "MUT_LOF"))
+      }
     }
   }
-
-  if (marker_type == "gene") {
-    if (nrow(var_eitems[var_eitems$BIOMARKER_MAPPING == "gene", ]) > 0) {
-      filtered_var_eitems <- var_eitems %>%
-        dplyr::filter(BIOMARKER_MAPPING == "gene" &
-                        CODING_STATUS == "coding") %>%
-        dplyr::filter((!is.na(EITEM_CONSEQUENCE) &
-                         startsWith(CONSEQUENCE, EITEM_CONSEQUENCE) |
-                         is.na(EITEM_CONSEQUENCE)) & CODING_STATUS == "coding")
-
-    }
-  }
-
-  if (nrow(filtered_var_eitems) > 0) {
-
-    if("LOSS_OF_FUNCTION" %in% colnames(filtered_var_eitems) &
-       "ALTERATION_TYPE" %in% colnames(filtered_var_eitems)){
-
-      filtered_var_eitems <- filtered_var_eitems %>%
-        dplyr::filter((LOSS_OF_FUNCTION == T &
-                         ALTERATION_TYPE == "MUT_LOF") |
-                        is.na(LOSS_OF_FUNCTION) |
-                        (LOSS_OF_FUNCTION == F &
-                           ALTERATION_TYPE != "MUT_LOF"))
-    }
-  }
-
   filtered_var_eitems <- filtered_var_eitems %>%
     pcgrr::remove_cols_from_df(cnames = c("EITEM_CONSEQUENCE",
                                           "EITEM_CODON",
-                                          "EITEM_EXON"))
+                                          "EITEM_EXON",
+                                          "HGVSp_short",
+                                          "VARIANT_NAME"))
 
   return(filtered_var_eitems)
 
@@ -710,7 +750,7 @@ deduplicate_eitems <- function(var_eitems = NULL,
   ## already present at the codon level
   if (NROW(var_eitems[[target_type]]) > 0) {
     for (m in target_other) {
-      if (NROW(var_eitems[[m]] > 0)) {
+      if (NROW(var_eitems[[m]]) > 0) {
         assertable::assert_colnames(var_eitems[[m]], "GENOMIC_CHANGE",
                                     only_colnames = F, quiet = T)
         var_eitems[[m]] <- var_eitems[[m]] %>%
